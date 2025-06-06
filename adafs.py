@@ -24,7 +24,7 @@ class AdaFS(Operations):
     def _map_to_virtual_path(self, dirpath, filename):
         basename, ext = os.path.splitext(filename)
         package_name = basename.split('-')[0].replace('_dot_', '/').upper()
-        return os.path.join('/', package_name, package_name + ext.upper())
+        return os.path.join('/', package_name.replace('/', os.sep), package_name.split('/')[-1] + ext.upper())
 
     def getattr(self, path, fh=None):
         if path in self.files:
@@ -37,7 +37,7 @@ class AdaFS(Operations):
 
     def readdir(self, path, fh):
         if path == '/':
-            return ['.', '..'] + [d.split('/')[1] for d in self.directories.keys()]
+            return ['.', '..'] + [d.split(os.sep)[1] for d in self.directories.keys()]
         else:
             dir_path = path.rstrip('/')
             if dir_path in self.directories:

@@ -7,7 +7,7 @@ class AdaFS(Operations):
     def __init__(self, root):
         self.root = root
         self.files = {}
-        self.directories = set()
+        self.directories = {}
         self._build_filesystem()
 
     def _build_filesystem(self):
@@ -16,7 +16,10 @@ class AdaFS(Operations):
                 if filename.endswith(('.ads', '.adb')):
                     virtual_path = self._map_to_virtual_path(dirpath, filename)
                     self.files[virtual_path] = os.path.join(dirpath, filename)
-                    self.directories.add(os.path.dirname(virtual_path))
+                    dir_path = os.path.dirname(virtual_path)
+                    if dir_path not in self.directories:
+                        self.directories[dir_path] = set()
+                    self.directories[dir_path].add(virtual_path)
 
     def _map_to_virtual_path(self, dirpath, filename):
         basename, ext = os.path.splitext(filename)
@@ -34,9 +37,13 @@ class AdaFS(Operations):
 
     def readdir(self, path, fh):
         if path == '/':
-            return ['.', '..'] + [d.split('/')[1] for d in self.directories]
+            return ['.', '..'] + [d.split('/')[1] for d in self.directories.keys()]
         else:
-            return ['.', '..'] + [os.path.basename(f) for f in self.files if f.startswith(path)]
+            dir_path = path.rstrip('/')
+            if dir_path in self.directories:
+                return ['.', '..'] + [os.path.basename(f) for f in self.directories[dir_path]]
+            else:
+                return ['.', '..']
 
     def open(self, path, flags):
         if path not in self.files:

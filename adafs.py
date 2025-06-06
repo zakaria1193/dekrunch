@@ -11,7 +11,7 @@ class AdaFS(Operations):
         self._build_filesystem()
 
     def _build_filesystem(self):
-        for dirpath, dirnames, filenames in os.walk(self.root, topdown=True):
+        for dirpath, dirnames, filenames in os.walk(self.root):
             for filename in filenames:
                 if filename.endswith(('.ads', '.adb')):
                     virtual_path = self._map_to_virtual_path(dirpath, filename)
@@ -37,7 +37,7 @@ class AdaFS(Operations):
 
     def readdir(self, path, fh):
         if path == '/':
-            return ['.', '..'] + [d.split(os.sep)[1] for d in self.directories.keys() if d.count(os.sep) == 1]
+            return ['.', '..'] + [d.split(os.sep)[1] for d in self.directories.keys()]
         else:
             dir_path = path.rstrip('/')
             if dir_path in self.directories:

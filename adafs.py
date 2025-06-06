@@ -1,5 +1,6 @@
 import os
 import sys
+import argparse
 import errno
 from fuse import FUSE, FuseOSError, Operations
 
@@ -69,11 +70,12 @@ class AdaFS(Operations):
         raise FuseOSError(errno.EROFS)
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        print('usage: %s <source> <mountpoint>' % sys.argv[0])
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description='Mount a FUSE filesystem for Ada packages.')
+    parser.add_argument('source', help='Source directory containing GNAT-crunched Ada files')
+    parser.add_argument('mountpoint', help='Mount point for the FUSE filesystem')
+    args = parser.parse_args()
 
-    source = sys.argv[1]
-    mountpoint = sys.argv[2]
+    source = args.source
+    mountpoint = args.mountpoint
 
     FUSE(AdaFS(source), mountpoint, nothreads=True, foreground=True, ro=True)

@@ -1,81 +1,64 @@
 import os
 import sys
 import argparse
-import errno
-from fuse import FUSE, FuseOSError, Operations
+import time
 
-class AdaFS(Operations):
-    def __init__(self, root):
-        self.root = root
-        self.files = {}
-        self.directories = {}
-        self._build_filesystem()
 
-    def _build_filesystem(self):
-        for dirpath, dirnames, filenames in os.walk(self.root):
-            for filename in filenames:
-                if filename.endswith(('.ads', '.adb')):
-                    virtual_path = self._map_to_virtual_path(dirpath, filename)
-                    self.files[virtual_path] = os.path.join(dirpath, filename)
-                    dir_path = os.path.dirname(virtual_path)
-                    if dir_path not in self.directories:
-                        self.directories[dir_path] = set()
-                    self.directories[dir_path].add(virtual_path)
+def map_to_virtual(src_root, path):
+    """Return the virtual path for a single GNAT-crunched file."""
+    rel = os.path.relpath(path, src_root)
+    dirs, fname = os.path.split(rel)
+    base, ext = os.path.splitext(fname)
+    if '-' in base:
+        base = base.split('-')[0]
+    package = base.replace('_dot_', '/').upper()
+    components = package.split('/')
+    file_name = components[-1] + ext.lower()
+    return os.path.join(dirs, *components[:-1], components[-1], file_name)
 
-    def _map_to_virtual_path(self, dirpath, filename):
-        basename, ext = os.path.splitext(filename)
-        package_name = basename.split('-')[0].replace('_dot_', '/').upper()
-        return os.path.join('/', package_name.replace('/', os.sep), package_name.split('/')[-1] + ext.upper())
 
-    def getattr(self, path, fh=None):
-        if path in self.files:
-            st = os.lstat(self.files[path])
-            return dict((key, getattr(st, key)) for key in ('st_atime', 'st_ctime', 'st_gid', 'st_mode', 'st_mtime', 'st_nlink', 'st_size', 'st_uid'))
-        elif path in self.directories:
-            return dict(st_mode=(os.stat.S_IFDIR | 0o755), st_nlink=2)
-        else:
-            raise FuseOSError(errno.ENOENT)
+def build_view(src_root, mount_root):
+    """Create a plain directory hierarchy representing the virtual FS."""
+    created_dirs = set()
+    for root, _, files in os.walk(src_root):
+        rel_dir = os.path.relpath(root, src_root)
+        target_dir = os.path.join(mount_root, rel_dir) if rel_dir != '.' else mount_root
+        os.makedirs(target_dir, exist_ok=True)
+        created_dirs.add(target_dir)
+        for f in files:
+            if not (f.endswith('.ads') or f.endswith('.adb')):
+                continue
+            src_file = os.path.join(root, f)
+            virt = map_to_virtual(src_root, src_file)
+            dest = os.path.join(mount_root, virt)
+            dest_dir = os.path.dirname(dest)
+            if dest_dir not in created_dirs:
+                os.makedirs(dest_dir, exist_ok=True)
+                created_dirs.add(dest_dir)
+            if not os.path.exists(dest):
+                os.symlink(os.path.relpath(src_file, dest_dir), dest)
 
-    def readdir(self, path, fh):
-        if path == '/':
-            return ['.', '..'] + [d.split(os.sep)[1] for d in self.directories.keys()]
-        else:
-            dir_path = path.rstrip('/')
-            if dir_path in self.directories:
-                return ['.', '..'] + [os.path.basename(f) for f in self.directories[dir_path]]
-            else:
-                return ['.', '..']
+    # Make all created directories read-only to mimic a read-only mount
+    for d in sorted(created_dirs, key=len, reverse=True):
+        try:
+            os.chmod(d, 0o555)
+        except OSError:
+            pass
 
-    def open(self, path, flags):
-        if path not in self.files:
-            raise FuseOSError(errno.ENOENT)
-        if flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT):
-            raise FuseOSError(errno.EROFS)
-        return os.open(self.files[path], flags)
 
-    def read(self, path, size, offset, fh):
-        os.lseek(fh, offset, os.SEEK_SET)
-        return os.read(fh, size)
-
-    def mkdir(self, path, mode):
-        raise FuseOSError(errno.EROFS)
-
-    def rmdir(self, path):
-        raise FuseOSError(errno.EROFS)
-
-    def unlink(self, path):
-        raise FuseOSError(errno.EROFS)
-
-    def rename(self, old, new):
-        raise FuseOSError(errno.EROFS)
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Mount a FUSE filesystem for Ada packages.')
-    parser.add_argument('source', help='Source directory containing GNAT-crunched Ada files')
-    parser.add_argument('mountpoint', help='Mount point for the FUSE filesystem')
+def main():
+    parser = argparse.ArgumentParser(description="Simulate Ada FUSE view")
+    parser.add_argument("source")
+    parser.add_argument("mountpoint")
     args = parser.parse_args()
 
-    source = args.source
-    mountpoint = args.mountpoint
+    build_view(args.source, args.mountpoint)
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
 
-    FUSE(AdaFS(source), mountpoint, nothreads=True, foreground=True, ro=True)
+
+if __name__ == "__main__":
+    main()

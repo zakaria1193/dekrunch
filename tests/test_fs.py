@@ -24,7 +24,14 @@ class FSBase(unittest.TestCase):
             stderr=subprocess.PIPE,
         )
         time.sleep(0.5)
-        self.addCleanup(lambda: (proc.terminate(), proc.wait()))
+
+        def cleanup():
+            proc.terminate()
+            proc.wait()
+            proc.stdout.close()
+            proc.stderr.close()
+
+        self.addCleanup(cleanup)
         return mnt
 
     def fixture_path(self, case: str, name: str) -> str:

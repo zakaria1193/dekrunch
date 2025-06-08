@@ -14,6 +14,12 @@ class FSBase(unittest.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmpdir.cleanup)
 
+    def print_tree(self, path: str) -> None:
+        """Print directory tree of path if the `tree` command exists."""
+        tree_bin = shutil.which("tree")
+        if tree_bin:
+            subprocess.run([tree_bin, path], check=False)
+
     def mount_fs(self, src_dir: str) -> str:
         mnt = os.path.join(self.tmpdir.name, "mnt")
         if os.path.exists(mnt):
@@ -22,6 +28,7 @@ class FSBase(unittest.TestCase):
         subprocess.run([
             "python3",
             ADA_FS_SCRIPT,
+            "mount",
             str(src_dir),
             str(mnt),
         ], check=True)
@@ -34,6 +41,7 @@ class FSBase(unittest.TestCase):
 class TestFs(FSBase):
     def test_case1_single_package(self):
         src = os.path.join(REPO_ROOT, "tests/fixtures/case1")
+        self.print_tree(src)
         mnt = self.mount_fs(src)
         self.assertEqual(sorted(os.listdir(mnt)), ["A"])
         a_dir = os.path.join(mnt, "A")
@@ -45,6 +53,7 @@ class TestFs(FSBase):
 
     def test_case2_spec_only(self):
         src = os.path.join(REPO_ROOT, "tests/fixtures/case2")
+        self.print_tree(src)
         mnt = self.mount_fs(src)
         self.assertEqual(sorted(os.listdir(mnt)), ["UTIL"])
         util_dir = os.path.join(mnt, "UTIL")
@@ -56,6 +65,7 @@ class TestFs(FSBase):
 
     def test_case3_nested_child(self):
         src = os.path.join(REPO_ROOT, "tests/fixtures/case3")
+        self.print_tree(src)
         mnt = self.mount_fs(src)
         self.assertEqual(sorted(os.listdir(mnt)), ["OUTER"])
         outer_dir = os.path.join(mnt, "OUTER")
@@ -69,6 +79,7 @@ class TestFs(FSBase):
 
     def test_case4_grandchild(self):
         src = os.path.join(REPO_ROOT, "tests/fixtures/case4")
+        self.print_tree(src)
         mnt = self.mount_fs(src)
         self.assertEqual(os.listdir(mnt), ["PKG"])
         pkg_dir = os.path.join(mnt, "PKG")
@@ -84,6 +95,7 @@ class TestFs(FSBase):
         dup = os.path.join(case_dir, "pkg-bbbbbbbb.adb")
         with open(dup, "w") as f:
             f.write("-- duplicate body")
+        self.print_tree(case_dir)
         mnt = self.mount_fs(case_dir)
         pkg_dir = os.path.join(mnt, "PKG")
         files = sorted(os.listdir(pkg_dir))
@@ -92,6 +104,7 @@ class TestFs(FSBase):
 
     def test_case5b_collision_spec(self):
         src = os.path.join(REPO_ROOT, "tests/fixtures/case5b")
+        self.print_tree(src)
         mnt = self.mount_fs(src)
         pkg_dir = os.path.join(mnt, "X")
         files = sorted(os.listdir(pkg_dir))
@@ -100,12 +113,14 @@ class TestFs(FSBase):
     @unittest.expectedFailure
     def test_case6_read_only(self):
         src = os.path.join(REPO_ROOT, "tests/fixtures/case6")
+        self.print_tree(src)
         mnt = self.mount_fs(src)
         a_dir = os.path.join(mnt, "A")
         os.open(os.path.join(a_dir, "NEW.ads"), os.O_CREAT | os.O_WRONLY).close()
 
     def test_case7_long_names(self):
         src = os.path.join(REPO_ROOT, "tests/fixtures/case7")
+        self.print_tree(src)
         mnt = self.mount_fs(src)
         leaf = os.path.join(mnt, "SUPER_LONG_PKG", "SUB_PKG", "LEAF_PKG")
         self.assertTrue(os.path.isdir(leaf))
@@ -116,6 +131,7 @@ class TestFs(FSBase):
 
     def test_case8_case_insensitive(self):
         src = os.path.join(REPO_ROOT, "tests/fixtures/case8")
+        self.print_tree(src)
         mnt = self.mount_fs(src)
         self.assertEqual(os.listdir(mnt), ["MATH"])
         vec_dir_upper = os.path.join(mnt, "MATH", "VECTOR")
@@ -123,6 +139,7 @@ class TestFs(FSBase):
 
     def test_case9_hide_noise(self):
         src = os.path.join(REPO_ROOT, "tests/fixtures/case9")
+        self.print_tree(src)
         mnt = self.mount_fs(src)
         self.assertEqual(os.listdir(mnt), ["A"])
         a_dir = os.path.join(mnt, "A")
@@ -144,6 +161,7 @@ class TestFs(FSBase):
     def test_case10_large_hierarchy_performance(self):
         case_dir = Path(self.tmpdir.name) / "case10"
         self.generate_case10(case_dir)
+        self.print_tree(str(case_dir))
         mnt = self.mount_fs(str(case_dir))
         start = time.time()
         root_entries = os.listdir(mnt)
@@ -163,6 +181,7 @@ class TestFs(FSBase):
 
     def test_case11_preserve_nested(self):
         src = os.path.join(REPO_ROOT, "tests/fixtures/case11")
+        self.print_tree(src)
         mnt = self.mount_fs(src)
         self.assertEqual(sorted(os.listdir(mnt)), ["A", "legacy"])
         a_dir = os.path.join(mnt, "A")

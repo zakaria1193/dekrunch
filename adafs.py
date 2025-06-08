@@ -4,7 +4,6 @@ import os
 import sys
 import argparse
 import shutil
-import time
 
 
 def map_to_virtual(src_root, path):
@@ -39,7 +38,13 @@ def build_view(src_root, mount_root):
                 os.makedirs(dest_dir, exist_ok=True)
                 created_dirs.add(dest_dir)
             if not os.path.exists(dest):
-                os.symlink(os.path.relpath(src_file, dest_dir), dest)
+                # Use absolute symlinks so later directory moves don't break
+                # the references when running post-processing passes.
+                os.symlink(os.path.abspath(src_file), dest)
+
+    # Group packages that have nested packages under their fully qualified
+    # prefix before locking down permissions.
+    categorize_directory(mount_root)
 
     # Make all created directories read-only to mimic a read-only mount
     for d in sorted(created_dirs, key=len, reverse=True):
@@ -47,6 +52,32 @@ def build_view(src_root, mount_root):
             os.chmod(d, 0o755)
         except OSError:
             pass
+
+
+def _categorize_dir(path: str, pkg_prefix: str) -> None:
+    entries = os.listdir(path)
+    subdirs = [d for d in entries if os.path.isdir(os.path.join(path, d))]
+    for d in subdirs:
+        _categorize_dir(os.path.join(path, d), f"{pkg_prefix}.{d}")
+
+    has_spec = os.path.isfile(os.path.join(path, os.path.basename(path) + ".ads"))
+    has_body = os.path.isfile(os.path.join(path, os.path.basename(path) + ".adb"))
+    if subdirs and (has_spec or has_body):
+        parent = os.path.dirname(path)
+        group_dir = os.path.join(parent, pkg_prefix)
+        if os.path.abspath(group_dir) != os.path.abspath(path):
+            os.makedirs(group_dir, exist_ok=True)
+                shutil.move(path, os.path.join(group_dir, os.path.basename(path)))
+            except (OSError, shutil.Error) as e:
+                print(f"Error moving {path} to {os.path.join(group_dir, os.path.basename(path))}: {e}", file=sys.stderr)
+                # Optionally, re-raise the exception or handle it as needed
+
+
+def categorize_directory(root: str) -> None:
+    for name in os.listdir(root):
+        p = os.path.join(root, name)
+        if os.path.isdir(p):
+            _categorize_dir(p, name)
 
 
 def main():
@@ -67,6 +98,7 @@ def main():
 
     if command == "mount":
         build_view(args.source, mountpoint)
+        categorize_directory(mountpoint)
     else:
         if os.path.isdir(mountpoint):
             shutil.rmtree(mountpoint)

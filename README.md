@@ -13,7 +13,10 @@ You will need Python 3 and `fusepy` with FUSE available on your system:
 python3 adafs.py <source_directory> <mount_point>
 ```
 
-The mount point will contain uppercased package directories. Change into the mount point to browse the packages.
+The mount point will contain uppercased package directories. Packages that
+contain nested packages are automatically moved under directories named after
+their fully qualified prefix, creating a cleaner hierarchy without requiring any
+additional commands.
 
 ## Mapping rules
 

@@ -61,7 +61,11 @@ def _categorize_dir(path: str, pkg_prefix: str) -> None:
         group_dir = os.path.join(parent, pkg_prefix)
         if os.path.abspath(group_dir) != os.path.abspath(path):
             os.makedirs(group_dir, exist_ok=True)
-            shutil.move(path, os.path.join(group_dir, os.path.basename(path)))
+            try:
+                shutil.move(path, os.path.join(group_dir, os.path.basename(path)))
+            except (OSError, shutil.Error) as e:
+                print(f"Error moving {path} to {os.path.join(group_dir, os.path.basename(path))}: {e}", file=sys.stderr)
+                # Optionally, re-raise the exception or handle it as needed
 
 
 def categorize_directory(root: str) -> None:

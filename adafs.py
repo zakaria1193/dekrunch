@@ -47,16 +47,19 @@ def build_view(src_root, mount_root):
             pass
 
 
-def main():
-    argv = sys.argv[1:]
-    command = "mount"
-    if argv and argv[0] in ("mount", "unmount"):
-        command = argv.pop(0)
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+
+    if argv and argv[0] not in {"mount", "unmount"}:
+        argv = ["mount"] + argv
 
     parser = argparse.ArgumentParser(description="Simulate Ada FUSE view")
+    parser.add_argument("command", choices=["mount", "unmount"])
     parser.add_argument("source")
     parser.add_argument("mountpoint", nargs="?")
     args = parser.parse_args(argv)
+
+    command = args.command
 
     mountpoint = args.mountpoint
     if mountpoint is None:

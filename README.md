@@ -490,7 +490,7 @@ noise.txt
    * Create a pytest fixture `mount_fs(src_dir, tmp_path)` that:
 
      1. Creates a mount point (`tmp_path/"mnt"`).
-     2. Launches `adafs.py src_dir mount_point` as a subprocess.
+  2. Launches `adafs.py mount src_dir mount_point` as a subprocess.
      3. Sleeps 0.5 seconds for the FUSE layer to become ready.
      4. Yields the string path of the mounted directory.
      5. After the test function, terminates and waits on the subprocess to unmount.
@@ -506,8 +506,8 @@ noise.txt
          src_dir = request.param
          mnt = tmp_path / "mnt"
          mnt.mkdir()
-         proc = subprocess.Popen(
-             ["python3", "adafs.py", str(src_dir), str(mnt)],
+          proc = subprocess.Popen(
+              ["python3", "adafs.py", "mount", str(src_dir), str(mnt)],
              stdout=subprocess.PIPE,
              stderr=subprocess.PIPE,
          )
@@ -575,9 +575,12 @@ Your README should include:
 3. **Usage**
 
    ```
-   python3 adafs.py <source_directory> <mount_point>
+   python3 adafs.py mount <source_directory> [mount_point]
+   # or to unmount
+   python3 adafs.py unmount <source_directory> [mount_point]
    ```
 
+   * If `mount_point` is omitted, `<source_directory>.fuse` is used.
    * Once mounted, you can `cd <mount_point>` and see the virtual Ada packages.
 
 4. **Mapping Logic**

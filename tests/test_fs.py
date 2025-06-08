@@ -90,8 +90,8 @@ class TestFs(FSBase):
         self.print_tree(mnt)
         self.assertEqual(os.listdir(mnt), ["PKG"])
         pkg_dir = os.path.join(mnt, "PKG")
-        self.assertEqual(set(os.listdir(pkg_dir)), {"PKG.ads", "PKG.adb", "SUB"})
-        sub_dir = os.path.join(pkg_dir, "SUB")
+        self.assertEqual(set(os.listdir(pkg_dir)), {"PKG.ads", "PKG.adb", "PKG.SUB"})
+        sub_dir = os.path.join(pkg_dir, "PKG.SUB", "SUB")
         self.assertEqual(set(os.listdir(sub_dir)), {"SUB.ads", "SUB.adb", "LEAF"})
         leaf_dir = os.path.join(sub_dir, "LEAF")
         self.assertEqual(os.listdir(leaf_dir), ["LEAF.ads"])
@@ -194,13 +194,29 @@ class TestFs(FSBase):
         a_dir = os.path.join(mnt, "A")
         self.assertEqual(set(os.listdir(a_dir)), {"A.ads", "A.adb"})
         legacy_dir = os.path.join(mnt, "legacy")
-        x_dir = os.path.join(legacy_dir, "X")
+        grp = os.path.join(legacy_dir, "legacy.X")
+        x_dir = os.path.join(grp, "X")
         y_dir = os.path.join(x_dir, "Y")
         self.assertEqual(set(os.listdir(x_dir)), {"X.ads", "X.adb", "Y"})
         self.assertEqual(os.listdir(y_dir), ["Y.ads"])
         with open(os.path.join(y_dir, "Y.ads"), "rb") as v, open(self.fixture_path("case11/legacy", "x_dot_y-222222.ads"), "rb") as r:
             self.assertEqual(v.read(), r.read())
         self.assertNotIn("noise.txt", os.listdir(mnt))
+
+    def test_case12_recursive_categorization(self):
+        src = os.path.join(REPO_ROOT, "tests/fixtures/case12")
+        mnt = self.mount_fs(src)
+        self.print_tree(mnt)
+        system_dir = os.path.join(mnt, "SYSTEM")
+        self.assertEqual(os.listdir(system_dir), ["SYSTEM.TOTO"])
+        grp = os.path.join(system_dir, "SYSTEM.TOTO")
+        toto_dir = os.path.join(grp, "TOTO")
+        self.assertEqual(set(os.listdir(toto_dir)), {"TOTO.ads", "TOTO.adb", "SYSTEM.TOTO.TITI"})
+        titi_grp = os.path.join(toto_dir, "SYSTEM.TOTO.TITI")
+        titi_dir = os.path.join(titi_grp, "TITI")
+        self.assertEqual(set(os.listdir(titi_dir)), {"TITI.ads", "TATA"})
+        tata_dir = os.path.join(titi_dir, "TATA")
+        self.assertEqual(os.listdir(tata_dir), ["TATA.ads"])
 
 
 if __name__ == "__main__":

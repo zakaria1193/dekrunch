@@ -6,9 +6,6 @@ This project exposes a read-only, human-readable Ada package hierarchy from GNAT
 
 You will need Python 3 and `fusepy` with FUSE available on your system:
 
-```bash
-pip install fusepy
-```
 
 ## Usage
 
@@ -45,7 +42,9 @@ Files that do not end in `.ads` or `.adb` (e.g. `.ali`, `.o`, `*.ads~`, `README.
 
 Although directory and file names appear in uppercase, lookups accept any casing.
 
-## Test suite
+## 
+
+suite
 
 The `tests/` folder contains unit tests for eleven scenarios:
 

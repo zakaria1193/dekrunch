@@ -1,6 +1,7 @@
 import os
 import sys
 import argparse
+import shutil
 import time
 
 
@@ -47,12 +48,26 @@ def build_view(src_root, mount_root):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Simulate Ada FUSE view")
-    parser.add_argument("source")
-    parser.add_argument("mountpoint")
-    args = parser.parse_args()
+    argv = sys.argv[1:]
 
-    build_view(args.source, args.mountpoint)
+    parser = argparse.ArgumentParser(description="Simulate Ada FUSE view")
+    parser.add_argument("command", choices=["unmount", "mount"])
+    parser.add_argument("source")
+    parser.add_argument("mountpoint", nargs="?")
+    args = parser.parse_args(argv)
+
+    command = args.command
+
+    mountpoint = args.mountpoint
+    if mountpoint is None:
+        mountpoint = args.source.rstrip(os.sep) + ".fuse"
+        print("Mount dir not given, using : ", mountpoint)
+
+    if command == "mount":
+        build_view(args.source, mountpoint)
+    else:
+        if os.path.isdir(mountpoint):
+            shutil.rmtree(mountpoint)
 
 
 if __name__ == "__main__":

@@ -33,7 +33,7 @@ class AdaFuse(LoggingMixIn, Operations):
                 self._add_dir(os.path.dirname(virt))
 
     def _add_dir(self, path: str) -> None:
-        path = path.replace(os.sep, '/').upper()
+        path = self._normalize_path(path)
         while True:
             if path not in self._dirs:
                 self._dirs.add(path)

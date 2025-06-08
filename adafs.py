@@ -77,11 +77,19 @@ def categorize_directory(root: str) -> None:
             _categorize_dir(p, name)
 
 
+def print_tree(path: str) -> None:
+    """Print directory tree of path if the `tree` command exists."""
+
+    tree_bin = shutil.which("tree")
+    if tree_bin:
+        import subprocess
+        subprocess.run([tree_bin, path], check=False)
+
 def main():
     argv = sys.argv[1:]
 
     parser = argparse.ArgumentParser(description="Simulate Ada FUSE view")
-    parser.add_argument("command", choices=["unmount", "mount"])
+    parser.add_argument("command", choices=["unmount", "mount", "test"])
     parser.add_argument("source")
     parser.add_argument("mountpoint", nargs="?")
     args = parser.parse_args(argv)
@@ -93,12 +101,17 @@ def main():
         mountpoint = args.source.rstrip(os.sep) + ".fuse"
         print("Mount dir not given, using : ", mountpoint)
 
-    if command == "mount":
+    if command in [ "mount", "test"]:
         build_view(args.source, mountpoint)
         categorize_directory(mountpoint)
-    else:
+
+    if command == "test":
+        print_tree(mountpoint)
+
+    if command in [ "unmount", "test" ]:
         if os.path.isdir(mountpoint):
             shutil.rmtree(mountpoint)
+
 
 
 if __name__ == "__main__":

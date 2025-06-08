@@ -14,7 +14,7 @@ You are building a Python‐based FUSE filesystem (“adafs”) whose job is to 
 * File lookups are **case-insensitive**: a user should be able to do `/mnt/foo/bar/BAR.ads` or `/mnt/FOO/BAR/bar.ads` interchangeably.
 * If the source directory contains existing subdirectories (e.g. `legacy/`, `old/`, `subproj/`), those folders are **preserved** at the root of the mount. Inside each such folder, the same GNAT‐crunch→package logic is applied recursively.
 
-Your job is to implement that FUSE layer, and then verify its behavior by writing a suite of tests in Python (e.g. using pytest) that automatically mount the FS against various “fixtures” directories and check that the visible hierarchy and file contents match expectations. Below is a complete breakdown of every scenario (test case) you must support, followed by guidance on how to organize the tests and what to assert.
+Your job is to implement that FUSE layer, and then verify its behavior by writing a suite of tests in Python using the standard `unittest` framework. Those tests should automatically mount the FS against various “fixtures” directories and check that the visible hierarchy and file contents match expectations. Below is a complete breakdown of every scenario (test case) you must support, followed by guidance on how to organize the tests and what to assert.
 
 ---
 
@@ -77,7 +77,7 @@ Your job is to implement that FUSE layer, and then verify its behavior by writin
 
 ## 3. Comprehensive Test Cases
 
-Below are ten (plus one) explicit “fixtures → expected view” scenarios. For each case, you will create a small directory under `tests/fixtures/caseN/` containing exactly the on‐disk GNAT files (and subfolders where indicated). Then, write pytest functions that:
+Below are ten (plus one) explicit “fixtures → expected view” scenarios. For each case, you will create a small directory under `tests/fixtures/caseN/` containing exactly the on‐disk GNAT files (and subfolders where indicated). Then, write `unittest.TestCase` methods that:
 
 * Launch your FUSE process pointing at that fixture directory and a fresh mount point.
 * Wait briefly (e.g. 0.5 seconds) to let it finish mounting.
@@ -384,7 +384,7 @@ README.txt
     up to `pkg200_dot_sub3-<hash>.ads/adb`.
 
 **Assertions (Performance checks):**
-Use a small Python script (in pytest) that:
+Use a small Python script (e.g., a `unittest` test) that:
 
 ```python
 import os, time
@@ -467,7 +467,7 @@ noise.txt
 
 ---
 
-## 4. Test Suite Organization (pytest Example)
+## 4. Test Suite Organization (unittest Example)
 
 1. **Directory layout**
 
@@ -485,62 +485,64 @@ noise.txt
    └── setup.py (optional)  
    ```
 
-2. **Mount & Unmount Fixtures**
+2. **Mount & Unmount Helpers**
 
-   * Create a pytest fixture `mount_fs(src_dir, tmp_path)` that:
+   * In your `unittest` suite create a helper method `mount_fs(src_dir)` that:
 
-     1. Creates a mount point (`tmp_path/"mnt"`).
+     1. Creates a mount point (`tmpdir/mnt`).
      2. Launches `adafs.py src_dir mount_point` as a subprocess.
-     3. Sleeps 0.5 seconds for the FUSE layer to become ready.
-     4. Yields the string path of the mounted directory.
-     5. After the test function, terminates and waits on the subprocess to unmount.
+     3. Sleeps briefly (about 0.5 seconds) so the filesystem becomes ready.
+     4. Returns the mount path and stores the subprocess for teardown.
+
+   * In `tearDown`, terminate the subprocess and wait for it to exit so the directory is removed.
 
    * Example:
 
      ```python
-     import pytest, subprocess, time, os
+     import os, subprocess, tempfile, time, unittest
 
-     @pytest.fixture
-     def mount_fs(tmp_path, request):
-         # src_dir is provided via parametrization or by a helper
-         src_dir = request.param
-         mnt = tmp_path / "mnt"
-         mnt.mkdir()
-         proc = subprocess.Popen(
-             ["python3", "adafs.py", str(src_dir), str(mnt)],
-             stdout=subprocess.PIPE,
-             stderr=subprocess.PIPE,
-         )
-         time.sleep(0.5)
-         yield str(mnt), proc
-         proc.terminate()
-         proc.wait()
+     ADA_FS_SCRIPT = "adafs.py"
+
+     class FSBase(unittest.TestCase):
+         def setUp(self):
+             self.tmp = tempfile.TemporaryDirectory()
+             self.addCleanup(self.tmp.cleanup)
+
+         def mount_fs(self, src_dir: str) -> str:
+             mnt = os.path.join(self.tmp.name, "mnt")
+             os.mkdir(mnt)
+             self.proc = subprocess.Popen([
+                 "python3",
+                 ADA_FS_SCRIPT,
+                 src_dir,
+                 mnt,
+             ])
+             time.sleep(0.5)
+             return mnt
+
+         def tearDown(self):
+             if hasattr(self, "proc"):
+                 self.proc.terminate()
+                 self.proc.wait()
      ```
 
-3. **Parametrizing Each Test Case**
+3. **Test Methods Per Case**
 
-   * In `test_fs.py`, write one function per “case,” or parametrize a single function with a list of `(case_number, assertions)` tuples.
+   * In `test_fs.py`, create a method for each scenario. Each method mounts the appropriate fixture directory and performs the assertions.
    * Example for Case 1:
 
      ```python
-     import os, pytest
-
-     @pytest.mark.parametrize("case", ["case1"])
-     def test_case1(mount_fs, tmp_path):
-         # mount_fs will be parametrized with request.param = tmp_path/"fixtures"/case1
-         mnt, proc = mount_fs
-         # 1. Check top‐level directory names:
-         assert sorted(os.listdir(mnt)) == ["A"]
-         # 2. Check contents of /mnt/A/
-         a_dir = os.path.join(mnt, "A")
-         assert set(os.listdir(a_dir)) == {"A.ads", "A.adb"}
-         # 3. Content check
-         with open(os.path.join(a_dir, "A.ads"), "rb") as virt, \
-              open(os.path.join(str(tmp_path/"fixtures"/"case1"), "a-2adb2f.ads"), "rb") as real:
-             assert virt.read() == real.read()
-         # 4. Clean up is automatic via fixture teardown
+     class TestFs(FSBase):
+         def test_case1_single_package(self):
+             mnt = self.mount_fs(os.path.join(REPO_ROOT, "tests/fixtures/case1"))
+             self.assertEqual(sorted(os.listdir(mnt)), ["A"])
+             a_dir = os.path.join(mnt, "A")
+             self.assertEqual(set(os.listdir(a_dir)), {"A.ads", "A.adb"})
+             with open(os.path.join(a_dir, "A.ads"), "rb") as virt, \
+                  open(os.path.join(REPO_ROOT, "tests/fixtures/case1/a-2adb2f.ads"), "rb") as real:
+                 self.assertEqual(virt.read(), real.read())
      ```
-   * For Case 11, do something similar but check both `A` and `legacy`.
+   * For Case 11, add a similar method that checks both `A` and the `legacy` directory.
 
 4. **Collision Tests (Case 5a & 5b)**
 
@@ -550,8 +552,8 @@ noise.txt
 5. **Performance Test (Case 10)**
 
    * Programmatically generate the large hierarchy under `tests/fixtures/case10/` (you can write a small Python script that creates 200 × 3 × 2 = 1,200 files with random “hash” suffixes).
-   * In the pytest function, mount, then run the timing code shown above with asserts on time thresholds.
-   * Make sure to guard these performance tests so they don’t run if someone lacks resources (e.g. mark them with `@pytest.mark.slow`).
+   * In your test method, mount the fixture and then run the timing code shown above with asserts on time thresholds.
+   * If desired, add a custom decorator or environment check so the performance test can be skipped on low-resource systems.
 
 ---
 
@@ -686,108 +688,75 @@ When coding `adafs.py` (or whatever module you choose), ensure you:
 
    * Make sure your script is friendly to automated tests:
 
-     * If there’s a collision you refuse to mount, exit with a nonzero code and write an error message to stderr.
-     * If mounting succeeds, keep running in the foreground so pytest can test the mount.
-     * Use a small delay (`time.sleep(0.5)`) inside tests to allow the mount to become ready.
-     * Tests will call `proc.terminate()` and `proc.wait()` to unmount.
+    * If there’s a collision you refuse to mount, exit with a nonzero code and write an error message to stderr.
+    * If mounting succeeds, keep running in the foreground so the tests can exercise the mount.
+    * Use a small delay (`time.sleep(0.5)`) inside tests to allow the mount to become ready.
+    * Tests will call `proc.terminate()` and `proc.wait()` to unmount.
 
 ---
 
-## 7. Sample pytest Skeleton
+## 7. Sample `unittest` Skeleton
 
-Below is a minimal example of how your `tests/test_fs.py` might look. Duplicate this pattern for all 11 cases.
+Below is a minimal example of how `tests/test_fs.py` can be structured.
 
 ```python
 import os
-import pytest
 import subprocess
+import tempfile
 import time
+import unittest
 
-# Path to your adafs script
 ADA_FS_SCRIPT = "adafs.py"
 
-# Helper to mount and yield the mount point + process
-@pytest.fixture
-def mount_fs(tmp_path, request):
-    src_dir = request.param  # e.g. tmp_path/"fixtures"/"case1"
-    mnt = tmp_path / "mnt"
-    mnt.mkdir()
-    # Launch adafs.py in the foreground, read-only
-    proc = subprocess.Popen(
-        ["python3", ADA_FS_SCRIPT, str(src_dir), str(mnt)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    time.sleep(0.5)  # wait for mount
-    yield str(mnt), proc
-    # Teardown: terminate process (which unmounts)
-    proc.terminate()
-    proc.wait()
+class FSBase(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
 
-# ------------------------
-# Case 1: Single Package
-# ------------------------
-@pytest.mark.parametrize("mount_fs", [os.path.join(os.getcwd(), "tests/fixtures/case1")], indirect=True)
-def test_case1_single_package(mount_fs):
-    mnt, proc = mount_fs
+    def mount_fs(self, src_dir: str) -> str:
+        mnt = os.path.join(self.tmpdir.name, "mnt")
+        os.mkdir(mnt)
+        self.proc = subprocess.Popen([
+            "python3",
+            ADA_FS_SCRIPT,
+            src_dir,
+            mnt,
+        ])
+        time.sleep(0.5)
+        return mnt
 
-    # 1. Root should list ["A"]
-    assert sorted(os.listdir(mnt)) == ["A"]
+    def tearDown(self):
+        if hasattr(self, "proc"):
+            self.proc.terminate()
+            self.proc.wait()
 
-    # 2. /mnt/A/ contains A.ads, A.adb
-    a_dir = os.path.join(mnt, "A")
-    assert set(os.listdir(a_dir)) == {"A.ads", "A.adb"}
 
-    # 3. File contents match
-    with open(os.path.join(a_dir, "A.ads"), "rb") as virt, \
-         open(os.path.join(os.getcwd(), "tests/fixtures/case1/a-2adb2f.ads"), "rb") as real:
-        assert virt.read() == real.read()
+class TestFs(FSBase):
+    def test_case1_single_package(self):
+        mnt = self.mount_fs(os.path.join(os.getcwd(), "tests/fixtures/case1"))
+        self.assertEqual(sorted(os.listdir(mnt)), ["A"])
+        a_dir = os.path.join(mnt, "A")
+        self.assertEqual(set(os.listdir(a_dir)), {"A.ads", "A.adb"})
+        with open(os.path.join(a_dir, "A.ads"), "rb") as virt, \
+             open(os.path.join(os.getcwd(), "tests/fixtures/case1/a-2adb2f.ads"), "rb") as real:
+            self.assertEqual(virt.read(), real.read())
 
-    # 4. /mnt/A/A.adb matches as well
-    with open(os.path.join(a_dir, "A.adb"), "rb") as virt, \
-         open(os.path.join(os.getcwd(), "tests/fixtures/case1/a-2adb2f.adb"), "rb") as real:
-        assert virt.read() == real.read()
+    def test_case11_preserve_nested(self):
+        mnt = self.mount_fs(os.path.join(os.getcwd(), "tests/fixtures/case11"))
+        self.assertEqual(sorted(os.listdir(mnt)), ["A", "legacy"])
+        a_dir = os.path.join(mnt, "A")
+        self.assertEqual(set(os.listdir(a_dir)), {"A.ads", "A.adb"})
+        legacy_dir = os.path.join(mnt, "legacy")
+        self.assertTrue(os.path.isdir(legacy_dir))
+        x_dir = os.path.join(legacy_dir, "X")
+        self.assertEqual(set(os.listdir(x_dir)), {"X.ads", "X.adb"})
+        y_dir = os.path.join(legacy_dir, "Y")
+        self.assertEqual(os.listdir(y_dir), ["Y.ads"])
+        with self.assertRaises(FileNotFoundError):
+            open(os.path.join(y_dir, "Y.adb"), "rb")
 
-# ------------------------
-# Case 11: Preserving Nested Folder
-# ------------------------
-@pytest.mark.parametrize("mount_fs", [os.path.join(os.getcwd(), "tests/fixtures/case11")], indirect=True)
-def test_case11_preserve_nested(mount_fs):
-    mnt, proc = mount_fs
-
-    # 1. Root entries: ["A", "legacy"]
-    root_entries = sorted(os.listdir(mnt))
-    assert root_entries == ["A", "legacy"]
-
-    # 2. /mnt/A/ has A.ads, A.adb
-    a_dir = os.path.join(mnt, "A")
-    assert set(os.listdir(a_dir)) == {"A.ads", "A.adb"}
-    with open(os.path.join(a_dir, "A.ads"), "rb") as v, \
-         open(os.path.join(os.getcwd(), "tests/fixtures/case11/a-aaaaaa.ads"), "rb") as r:
-        assert v.read() == r.read()
-
-    # 3. /mnt/legacy is a directory
-    legacy_dir = os.path.join(mnt, "legacy")
-    assert os.path.isdir(legacy_dir)
-
-    # 4. /mnt/legacy/X/ has X.ads, X.adb
-    x_dir = os.path.join(legacy_dir, "X")
-    assert set(os.listdir(x_dir)) == {"X.ads", "X.adb"}
-    with open(os.path.join(x_dir, "X.ads"), "rb") as v, \
-         open(os.path.join(os.getcwd(), "tests/fixtures/case11/legacy/x-111111.ads"), "rb") as r:
-        assert v.read() == r.read()
-
-    # 5. /mnt/legacy/Y/ has only Y.ads
-    y_dir = os.path.join(legacy_dir, "Y")
-    assert os.listdir(y_dir) == ["Y.ads"]
-    with open(os.path.join(y_dir, "Y.ads"), "rb") as v, \
-         open(os.path.join(os.getcwd(), "tests/fixtures/case11/legacy/x_dot_y-222222.ads"), "rb") as r:
-        assert v.read() == r.read()
-    with pytest.raises(FileNotFoundError):
-        open(os.path.join(y_dir, "Y.adb"), "rb")
-
-    # 6. noise.txt is hidden
-    assert "noise.txt" not in os.listdir(mnt)
+if __name__ == "__main__":
+    unittest.main()
 ```
 
 * Repeat similar blocks for Cases 2–10, using parametrization to pass in `tests/fixtures/caseN`.

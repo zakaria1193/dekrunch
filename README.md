@@ -629,7 +629,12 @@ Your README should include:
     * Provide instructions on how to run tests:
 
       ```
-      pytest tests/
+      python3 -m unittest discover tests -v
+      ```
+      To run a single test case:
+
+      ```
+      python3 -m unittest tests.test_fs.TestFs.test_case1_single_package -v
       ```
 
 ---
@@ -802,7 +807,7 @@ def test_case11_preserve_nested(mount_fs):
    * `case1/` through `case11/`, each containing the exact on-disk GNAT-crunched files (and nested subfolders for case 11).
    * (For case 10, a small generator script is acceptable, but check in the generated files.)
 
-3. **`tests/test_fs.py`** (pytest suite)
+3. **`tests/test_fs.py`** (unittest suite)
 
    * Covers all scenarios with assertions as detailed.
    * Ensures performance metrics for case 10.
@@ -810,7 +815,7 @@ def test_case11_preserve_nested(mount_fs):
 4. **`README.md`**
 
    * Explains: installation, usage, mapping rules, read-only behavior, collisions/dedup policy, hidden files, preserving subdirectories, case insensitivity.
-   * Brief summary of the 11 test cases and how to run them (`pytest tests/`).
+   * Brief summary of the 11 test cases and how to run them (`python3 -m unittest discover tests -v`).
 
 ---
 

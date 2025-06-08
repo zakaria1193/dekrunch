@@ -42,7 +42,7 @@ def build_view(src_root, mount_root):
     # Make all created directories read-only to mimic a read-only mount
     for d in sorted(created_dirs, key=len, reverse=True):
         try:
-            os.chmod(d, 0o555)
+            os.chmod(d, 0o755)
         except OSError:
             pass
 

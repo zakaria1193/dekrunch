@@ -42,10 +42,6 @@ def build_view(src_root, mount_root):
                 # the references when running post-processing passes.
                 os.symlink(os.path.abspath(src_file), dest)
 
-    # Group packages that have nested packages under their fully qualified
-    # prefix before locking down permissions.
-    categorize_directory(mount_root)
-
     # Make all created directories read-only to mimic a read-only mount
     for d in sorted(created_dirs, key=len, reverse=True):
         try:
@@ -67,6 +63,7 @@ def _categorize_dir(path: str, pkg_prefix: str) -> None:
         group_dir = os.path.join(parent, pkg_prefix)
         if os.path.abspath(group_dir) != os.path.abspath(path):
             os.makedirs(group_dir, exist_ok=True)
+            try:
                 shutil.move(path, os.path.join(group_dir, os.path.basename(path)))
             except (OSError, shutil.Error) as e:
                 print(f"Error moving {path} to {os.path.join(group_dir, os.path.basename(path))}: {e}", file=sys.stderr)

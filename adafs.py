@@ -53,11 +53,6 @@ def main():
     args = parser.parse_args()
 
     build_view(args.source, args.mountpoint)
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        pass
 
 
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 import os
 import subprocess
-import time
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
+import time
 
 ADA_FS_SCRIPT = "adafs.py"
 
@@ -18,20 +18,12 @@ class FSBase(unittest.TestCase):
         if os.path.exists(mnt):
             shutil.rmtree(mnt)
         os.mkdir(mnt)
-        proc = subprocess.Popen(
-            ["python3", ADA_FS_SCRIPT, str(src_dir), str(mnt)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        time.sleep(0.5)
-
-        def cleanup():
-            proc.terminate()
-            proc.wait()
-            proc.stdout.close()
-            proc.stderr.close()
-
-        self.addCleanup(cleanup)
+        subprocess.run([
+            "python3",
+            ADA_FS_SCRIPT,
+            str(src_dir),
+            str(mnt),
+        ], check=True)
         return mnt
 
     def fixture_path(self, case: str, name: str) -> str:
